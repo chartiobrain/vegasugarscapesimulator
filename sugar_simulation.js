@@ -8,6 +8,8 @@ class Agent {
         this.metabolism = metabolism;
         this.lifespan = Math.floor(Math.random() * 41) + 40; // Initialize lifespan to a random value between 40 and 80
         this.age = 0; 
+        this.isYimby = isYimby; // New property to determine if the agent is a YIMBY
+
       }
     
       findBestPatch(grid) {
@@ -94,6 +96,8 @@ class Agent {
         const vision = Math.floor(Math.random() * 6) + 1;
         const metabolism = Math.floor(Math.random() * 4) + 1;
         const initialSugar = Math.floor(Math.random() * 21) + 5;
+        const isYimby = Math.random() >= 0.5; // Randomly assign true or false
+
         return new Agent(id, vision, metabolism, initialSugar);
       }
       
@@ -161,6 +165,7 @@ class Agent {
           const vision = Math.floor(Math.random() * 6) + 1;
           const metabolism = Math.floor(Math.random() * 4) + 1;
           const initialSugar = Math.floor(Math.random() * 21) + 5;
+          const isYimby = Math.random() >= 0.5; // Randomly assign true or false
           agents.push(new Agent(i, vision, metabolism, initialSugar));
         }
         return agents;
