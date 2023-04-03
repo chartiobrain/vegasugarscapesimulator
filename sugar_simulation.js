@@ -8,8 +8,6 @@ class Agent {
         this.metabolism = metabolism;
         this.lifespan = Math.floor(Math.random() * 41) + 40; // Initialize lifespan to a random value between 40 and 80
         this.age = 0; 
-        this.isYimby = isYimby; // New property to determine if the agent is a YIMBY
-
       }
     
       findBestPatch(grid) {
@@ -89,15 +87,46 @@ class Agent {
       this.initialSugarLevels = this.grid.map(cell => cell.sugar_level);
       this.nextAgentId = this.agents.length; // Initialize nextAgentId based on the number of agents created
       this.survivingAgentsData = [];
+      this.giniData = [];
+
     }
 
+
+
+    calculateGiniCoefficient() {
+        // Get the sugar levels of all agents
+        const sugarLevels = this.agents.map(agent => agent.sugar);
+
+        // Step 1: Sort the values in ascending order
+        const sortedValues = sugarLevels.slice().sort((a, b) => a - b);
+
+        // Step 2: Calculate the cumulative sum of the values
+        const cumulativeSum = sortedValues.map((value, index, array) => {
+        return array.slice(0, index + 1).reduce((a, b) => a + b, 0);
+        });
+
+        // Step 3: Calculate the cumulative proportion of the total sum for each value
+        const totalSum = cumulativeSum[cumulativeSum.length - 1];
+        const cumulativeProportions = cumulativeSum.map(sum => sum / totalSum);
+
+        // Step 4: Calculate the area under the Lorenz curve
+        const n = cumulativeProportions.length;
+        let areaUnderCurve = 0;
+        for (let i = 0; i < n - 1; i++) {
+        areaUnderCurve += (cumulativeProportions[i] + cumulativeProportions[i + 1]) / 2;
+        }
+        areaUnderCurve /= n;
+
+        // Step 5: Calculate the Gini coefficient
+        const giniCoefficient = 1 - (2 * areaUnderCurve);
+
+        return giniCoefficient;
+    }
 
     createNewAgent(id) {
         const vision = Math.floor(Math.random() * 6) + 1;
         const metabolism = Math.floor(Math.random() * 4) + 1;
         const initialSugar = Math.floor(Math.random() * 21) + 5;
-        const isYimby = Math.random() >= 0.5; // Randomly assign true or false
-
         return new Agent(id, vision, metabolism, initialSugar);
       }
       
@@ -165,7 +194,6 @@ class Agent {
           const vision = Math.floor(Math.random() * 6) + 1;
           const metabolism = Math.floor(Math.random() * 4) + 1;
           const initialSugar = Math.floor(Math.random() * 21) + 5;
-          const isYimby = Math.random() >= 0.5; // Randomly assign true or false
           agents.push(new Agent(i, vision, metabolism, initialSugar));
         }
         return agents;
@@ -189,7 +217,8 @@ class Agent {
         const agentData = this.agents.map(agent => ({
           x: agent.x,
           y: agent.y,
-          type: 'agent'
+          type: 'agent',
+          sugar: agent.sugar //add sugar property to represent wealth
         }));
         return gridData.concat(agentData);
       }
@@ -205,12 +234,20 @@ class Agent {
             if (!hasDied && !reachedEndOfLifespan) {
             // Agent has survived, add to the survivingAgents array
             survivingAgents.push(agent);
-            } else if (reachedEndOfLifespan) {
-                // Agent has reached end of lifespan, replace with a new agent
+            } else {
+                // Agent has reached end of lifespan or starved, replace with a new agent
                 const newAgent = this.createNewAgent(this.nextAgentId++);
                 survivingAgents.push(newAgent);
             }
         });
+
+        const giniCoefficient = this.calculateGiniCoefficient();
+        console.log('Gini Coefficient:', giniCoefficient);
+    
+        // Update the Gini data array
+        this.giniData.push({ timeStep: this.timeStep, giniCoefficient: giniCoefficient });
+        // ...
+
 
         // Update the agents array to only include surviving agents
         this.agents = survivingAgents;
@@ -226,7 +263,7 @@ class Agent {
         }
         }
   
-  function runSimulationStep(view, simulation, lineChartView) {
+  function runSimulationStep(view, simulation, lineChartView, giniChartView) {
     // Run a step of the simulation
     simulation.step();
   
@@ -241,9 +278,11 @@ class Agent {
     // Update the line chart with the new data
     lineChartView.change('lineChartData', vega.changeset().remove(() => true).insert(simulation.survivingAgentsData)).runAsync();
 
+    giniChartView.change('giniData', vega.changeset().remove(() => true).insert(simulation.giniData)).runAsync();
+
   
     // Schedule the next simulation step (you can adjust the interval as needed)
-    setTimeout(() => runSimulationStep(view, simulation, lineChartView), 500);
+    setTimeout(() => runSimulationStep(view, simulation, lineChartView, giniChartView), 500);
   }
 
 
@@ -257,7 +296,7 @@ class Agent {
   
     // Visualize the simulation using Vega
 
-
+        
     const lineChartSpec = {
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
         "data": { "name": "lineChartData" },
@@ -267,6 +306,27 @@ class Agent {
           "y": { "field": "survivingAgents", "type": "quantitative", "axis": { "title": "Surviving Agents" } }
         }
       };
+
+      const giniChartSpec = {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "width": 300,
+        "height": 200,
+        "data": {"name": "giniData"}, // Use a named data source
+        "mark": "area",
+        "encoding": {
+          "x": {
+            "field": "timeStep", // Use the timeStep field for the x-axis
+            "type": "quantitative",
+            "axis": {"title": "Time Step"}
+          },
+          "y": {
+            "field": "giniCoefficient", // Use the giniCoefficient field for the y-axis
+            "type": "quantitative",
+            "title": "Gini Coefficient"
+          }
+        }
+      };
+  
       
     const spec = {
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
@@ -302,6 +362,12 @@ class Agent {
           {
             "mark": "circle",
             "encoding": {
+            "size": {
+                "field": "sugar",
+                "type": "quantitative",
+                "scale": { "range": [50, 100] }, // Set the size range (min: 50, max: 100)
+                "legend": null
+                  },
               "x": {
                 "field": "x",
                 "type": "ordinal"
@@ -310,7 +376,6 @@ class Agent {
                 "field": "y",
                 "type": "ordinal"
               },
-              "size": { "value": 50 },
               "color": { "value": "black" },
               "opacity": {
                 "condition": {
@@ -340,9 +405,16 @@ const vegaSpec = vegaLite.compile(spec).spec;
   .data('lineChartData', simulation.survivingAgentsData) // Initialize with the initial data
   .run();
 
+  const giniChartView = new vega.View(vega.parse(vegaLite.compile(giniChartSpec).spec))
+    .renderer('canvas')
+    .initialize('#giniChart') // Specify the HTML element where the chart will be rendered
+    .data('giniData', []) // Initialize with an empty array
+    .run();
+
+
 
   // Start running the simulation
-  runSimulationStep(view, simulation, lineChartView);
+  runSimulationStep(view, simulation, lineChartView, giniChartView);
 }
   
 
