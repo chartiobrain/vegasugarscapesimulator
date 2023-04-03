@@ -6,7 +6,7 @@ class Agent {
         this.sugar = initialSugar;
         this.vision = vision;
         this.metabolism = metabolism;
-        this.lifespan = Math.floor(Math.random() * 41) + 40; // Initialize lifespan to a random value between 40 and 80
+        this.lifespan = 60; // Initialize lifespan to a random value between 40 and 80
         this.age = 0; 
       }
     
@@ -53,7 +53,6 @@ class Agent {
           this.y = bestPatch.y;
           this.sugar += bestPatch.sugar_level;
           bestPatch.sugar_level = 0;
-          this.lifespan = 60
           this.age++
 
 
@@ -91,6 +90,27 @@ class Agent {
 
     }
 
+    //calculate the average lifespan bucketed by vision and eventually pass it back into vega spec
+    calculateAverageLifespanByVision() {
+        const visionBuckets = {};
+        this.agents.forEach(agent => {
+          const vision = agent.vision;
+          const lifespan = agent.lifespan;
+          if (!visionBuckets[vision]) {
+            visionBuckets[vision] = { totalLifespan: 0, count: 0 };
+          }
+          visionBuckets[vision].totalLifespan += lifespan;
+          visionBuckets[vision].count += 1;
+        });
+      
+        const averageLifespanData = [];
+        for (const [vision, data] of Object.entries(visionBuckets)) {
+          const averageLifespan = data.totalLifespan / data.count;
+          averageLifespanData.push({ vision, averageLifespan });
+        }
+        return averageLifespanData;
+      }
+      
 
 
     calculateGiniCoefficient() {
@@ -190,7 +210,7 @@ class Agent {
   
     createAgents() {
         let agents = [];
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 100; i++) {
           const vision = Math.floor(Math.random() * 6) + 1;
           const metabolism = Math.floor(Math.random() * 4) + 1;
           const initialSugar = Math.floor(Math.random() * 21) + 5;
@@ -241,6 +261,9 @@ class Agent {
             }
         });
 
+        this.lifespanData = this.calculateAverageLifespanByVision();
+
+
         const giniCoefficient = this.calculateGiniCoefficient();
         console.log('Gini Coefficient:', giniCoefficient);
     
@@ -263,7 +286,7 @@ class Agent {
         }
         }
   
-  function runSimulationStep(view, simulation, lineChartView, giniChartView) {
+  function runSimulationStep(view, simulation, lineChartView, giniChartView, visionSurvivalChartView) {
     // Run a step of the simulation
     simulation.step();
   
@@ -281,8 +304,11 @@ class Agent {
     giniChartView.change('giniData', vega.changeset().remove(() => true).insert(simulation.giniData)).runAsync();
 
   
+    // Update the lifespan chart with the new data
+    visionSurvivalChartView.change('lifespanData', vega.changeset().remove(() => true).insert(simulation.lifespanData)).runAsync();
+
     // Schedule the next simulation step (you can adjust the interval as needed)
-    setTimeout(() => runSimulationStep(view, simulation, lineChartView, giniChartView), 500);
+    setTimeout(() => runSimulationStep(view, simulation, lineChartView, giniChartView, visionSurvivalChartView), 500);
   }
 
 
@@ -296,7 +322,27 @@ class Agent {
   
     // Visualize the simulation using Vega
 
-        
+    const visionSurvivalChartSpec = {
+
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "width": 300,
+        "height": 200,
+        "data": {"name": "lifespanData"}, // Use a named data source
+        "mark": "bar",
+        "encoding": {
+          "x": {
+            "field": "vision",
+            "type": "ordinal",
+            "title": "Vision"
+          },
+          "y": {
+            "field": "averageLifespan",
+            "type": "quantitative",
+            "title": "Average Lifespan"
+          }
+        }
+    };
+      
     const lineChartSpec = {
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
         "data": { "name": "lineChartData" },
@@ -406,15 +452,23 @@ const vegaSpec = vegaLite.compile(spec).spec;
   .run();
 
   const giniChartView = new vega.View(vega.parse(vegaLite.compile(giniChartSpec).spec))
-    .renderer('canvas')
-    .initialize('#giniChart') // Specify the HTML element where the chart will be rendered
-    .data('giniData', []) // Initialize with an empty array
-    .run();
+.renderer('canvas')
+.initialize('#giniChart') // Specify the HTML element where the chart will be rendered
+.data('giniData', []) // Initialize with an empty array
+.run();
+
+
+    // Create a Vega View instance from the Vega-Lite specification
+const visionSurvivalChartView = new vega.View(vega.parse(vegaLite.compile(visionSurvivalChartSpec).spec))
+.renderer('canvas')
+.initialize('#visionsurvival')
+.data('lifespanData', simulation.calculateAverageLifespanByVision()) // Initialize with the calculated data
+.run();
 
 
 
   // Start running the simulation
-  runSimulationStep(view, simulation, lineChartView, giniChartView);
+  runSimulationStep(view, simulation, lineChartView, giniChartView, visionSurvivalChartView);
 }
   
 
