@@ -1,0 +1,365 @@
+{
+  
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+"width": 300,
+"height": 300,
+"padding": 0,
+
+"signals": [
+  {
+    "name": "timeStep",
+    "value": 0,
+    "on": [
+      {"events": {"type": "timer", "throttle": 1000}, "update": "timeStep + 1"}
+    ]
+  },
+  {
+    "name": "sugarReset",
+    "value": false,
+    "on": [
+      {"events": {"type": "timer", "throttle": 1000}, "update": "!sugarReset"}
+    ]
+  },
+  
+
+
+],
+
+"data": [
+
+  // Generate a sequence of numbers from 0 to 29 for x and y-axis
+
+  {
+    "name": "x_values",
+    "transform": [
+
+      {
+        "type": "sequence",
+        "start": 0,
+        "stop": 30,
+        "as": "x"
+      }
+    ]
+  },
+  {
+    "name": "y_values",
+    "transform": [
+      {
+        "type": "sequence",
+        "start": 0,
+        "stop": 30,
+        "as": "y"
+      }
+    ]
+  },
+  {
+    "name": "grid",
+    "source": ["x_values", "y_values"],
+    "transform": [
+
+
+    // Create a Cartesian product of x_values and y_values
+
+      {
+        "type": "cross"
+      },
+
+    // Extract x values from the combined data
+
+      {
+        "type": "formula",
+        "expr": "datum.a.x",
+        "as": "x"
+      },
+
+      {
+    // Extract y values from the combined data
+
+        "type": "formula",
+        "expr": "datum.b.y",
+        "as": "y"
+      },
+      {
+    // Generate random sugar levels between 0 and 
+        "type": "formula",
+        "expr": "random() * 10",
+        "as": "sugar_level"
+      },
+
+    // Create avg sugar level for the x y grid point
+      {
+        "type": "joinaggregate",
+        "groupby": ["x", "y"],
+        "fields": ["sugar_level"],
+        "ops": ["average"],
+        "as": ["avg_sugar_level"]
+      },
+
+      // Create avg sugar level for the x y grid point
+      {
+        "type": "formula",
+        "expr": "datum.x + ',' + datum.y",
+        "as": "xy"
+      },
+
+      //Sugar value reset
+   
+      {
+        "type": "lookup",
+        "from": "occupied_cells",
+        "key": "xy",
+        "fields": ["xy"],
+        "as": ["occupied_data"]
+      },
+      {
+        "type": "formula",
+        "expr": "datum.occupied_data ? true : false",
+        "as": "occupied"
+      },
+      {
+        "type": "formula",
+        "expr": "datum.occupied ? max(0, datum.sugar_level - datum.avg_sugar_level) : datum.sugar_level",
+        "as": "updated_sugar_level"
+      }
+
+  
+    ]
+  },
+    {
+      "name": "agents",
+      "values": [
+          {"id": 1, "sugar": 0},
+          {"id": 2, "sugar": 0},
+          {"id": 3, "sugar": 0},
+          {"id": 4, "sugar": 0},
+          {"id": 5, "sugar": 0},
+          {"id": 6, "sugar": 0},
+          {"id": 7, "sugar": 0},
+          {"id": 8, "sugar": 0},
+          {"id": 9, "sugar": 0},
+          {"id": 10, "sugar": 0}
+      ],
+
+
+
+
+     
+      "transform": [
+
+        
+     {
+        "type": "formula",
+        "as": "x",
+        "expr": "timeStep === 0 ? floor(random() * (width / 10)) : datum.x"
+      },
+      {
+        "type": "formula",
+        "as": "y",
+        "expr": "timeStep === 0 ? floor(random() * (height / 10)) : datum.y"
+      },
+
+        {
+          "type": "formula",
+          "expr": "datum.x + ',' + datum.y",
+          "as": "xy"
+        },
+
+    {
+    "type": "lookup",
+    "from": "grid",
+    "key": "xy",
+    "fields": ["xy"],
+    "as": ["grid_data"]
+    },
+    {
+    "type": "formula",
+    "expr": "datum.x + ',' + datum.y",
+    "as": "xy"
+    },
+
+  //look at the grid xy position 
+    {
+    "type": "lookup",
+    "from": "grid",
+    "key": "xy",
+    "fields": ["xy"],
+    "as": ["current_grid_data"],
+    "update": {
+      "sugar_level": "datum.xy === datum.current_grid_data.xy ? max(0, datum.current_grid_data.sugar_level - datum.grid_data.avg_sugar_level) : datum.current_grid_data.sugar_level"
+    }
+  },
+      
+  //Add sugar to the agent from the grid he ate
+        
+      { 
+        "type": "formula",
+        "as": "sugar",
+        "expr": "datum.sugar + datum.grid_data['avg_sugar_level']"
+      },
+
+      {
+        "type": "formula",
+        "as": "north_xy",
+        "expr": "datum.x + ',' + (datum.y - 1)"
+      },
+      {
+        "type": "formula",
+        "as": "south_xy",
+        "expr": "datum.x + ',' + (datum.y + 1)"
+      },
+      {
+        "type": "formula",
+        "as": "west_xy",
+        "expr": "(datum.x - 1) + ',' + datum.y"
+      },
+      {
+        "type": "formula",
+        "as": "east_xy",
+        "expr": "(datum.x + 1) + ',' + datum.y"
+      },
+
+      //look up neighboring sugar cell values
+      {
+        "type": "lookup",
+        "from": "grid",
+        "key": "xy",
+        "fields": ["north_xy", "south_xy", "west_xy", "east_xy"],
+        "as": ["north_data", "south_data", "west_data", "east_data"]
+      },
+      {
+        "type": "formula",
+        "as": "north_sugar",
+        "expr": "datum.north_data ? datum.north_data.avg_sugar_level : 0"
+      },
+      {
+        "type": "formula",
+        "as": "south_sugar",
+        "expr": "datum.south_data ? datum.south_data.avg_sugar_level : 0"
+      },
+      {
+        "type": "formula",
+        "as": "west_sugar",
+        "expr": "datum.west_data ? datum.west_data.avg_sugar_level : 0"
+      },
+      {
+        "type": "formula",
+        "as": "east_sugar",
+        "expr": "datum.east_data ? datum.east_data.avg_sugar_level : 0"
+      },
+
+      //find the max sugar amoung the neighbors
+
+      {
+      "type": "formula",
+      "as": "max_sugar",
+      "expr": "max(datum.north_sugar, datum.south_sugar, datum.west_sugar, datum.east_sugar)"
+      },
+
+    //move to the x and y of the max sugar
+      {
+      "type": "formula",
+      "as": "move_x",
+      "expr": "datum.max_sugar === datum.west_sugar ? datum.x - 1 : (datum.max_sugar === datum.east_sugar ? datum.x + 1 : datum.x)"
+      },
+      {
+      "type": "formula",
+      "as": "move_y",
+      "expr": "datum.max_sugar === datum.north_sugar ? datum.y - 1 : (datum.max_sugar === datum.south_sugar ? datum.y + 1 : datum.y)"
+      },  
+
+      {
+        "type": "formula",
+        "expr": "datum.move_x + ',' + datum.move_y",
+        "as": "occupied_xy"
+      }
+        
+        
+      ]
+    }
+  ],
+
+  {
+    "name": "occupied_cells",
+    "source": "agents",
+    "transform": [
+      {
+        "type": "project",
+        "fields": ["occupied_xy"],  // Use "occupied_xy" here
+        "as": ["xy"]                // Rename it to "xy"
+      },
+      {
+        "type": "formula",
+        "expr": "true",
+        "as": "occupied"
+      }
+    ]
+  },
+  
+  
+
+
+
+
+
+  "scales": [
+    {
+      "name": "color",
+      "type": "linear",
+      "domain": [0, 10],
+      "range": ["#F0E68C", "#8B4513"]
+    },
+    {
+      "name": "x",
+      "type": "band",
+      "domain": {"data": "grid", "field": "x"},
+      "range": "width",
+      "padding": 0
+    },
+    {
+      "name": "y",
+      "type": "band",
+      "domain": {"data": "grid", "field": "y"},
+      "range": "height",
+      "padding": 0
+    }
+  ],
+
+  "marks": [
+    {
+      "type": "rect",
+      "from": {"data": "grid"},
+      "encode": {
+        "enter": {
+          "x": {"scale": "x", "field": "x"},
+          "y": {"scale": "y", "field": "y"},
+          "width": {"scale": "x", "band": 1},
+          "height": {"scale": "y", "band": 1},
+          "fill": {"scale": "color", "field": "updated_sugar_level"}
+        }
+      }
+    },
+    {
+      "type": "symbol",
+      "from": {"data": "agents"},
+      "encode": {
+        "enter": {
+          "size": {"value": 100},
+          "shape": {"value": "circle"}
+        },
+        "update": {
+          "x": {"scale": "x", "field": "x"},
+          "y": {"scale": "y", "field": "y"}
+        }
+          
+        }
+      }
+    
+
+],
+
+"config": {
+"range": {
+"category": {"scheme": "category10"}
+}
+}
+}
